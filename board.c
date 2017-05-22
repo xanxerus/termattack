@@ -86,7 +86,7 @@ void drawBoard(int player){
 				case 13: //lake
 					break;
 				default: //1 through 9
-					mvaddch(printRow, printCol, BOARD[row][col].rank + 47);
+					mvaddch(printRow, printCol, BOARD[row][col].rank + 48);
 					break;
 			}
 			
@@ -196,4 +196,11 @@ void drawPiece2(int row, int col, int player){
 
 void selectPiece2(int row, int col, int player){
 	selectPiece(row-rowStart, (col-colStart)>>1, player);
+}
+
+void clearPiece(Piece* piece){
+	piece->player = 0;
+	piece->rank = 0;
+	piece->known1 = 0;
+	piece->known2 = 0;
 }

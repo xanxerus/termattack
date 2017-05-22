@@ -4,6 +4,8 @@
 #include "board.h"
 
 void setupBoard(int);
+int takeTurn(int);
+void defaultSetup();
 
 int main(){
 	initscr();
@@ -32,18 +34,22 @@ int main(){
 	init_pair(5, COLOR_WHITE, COLOR_BLACK);
 	
 	initsize();
-	if( maxx < 20 || maxy < 10 ){
+	if( maxx < 25 || maxy < 10 ){
 		endwin();
-		printf("Your terminal (%dx%d) is too small. Must be at least 20x10\n", maxx, maxy);
+		printf("Your terminal (%dx%d) is too small. Must be at least 25x10\n", maxx, maxy);
 		return 2;
 	}
 	
-	resetBoard();
-	
-	drawBoard(1);
-	setupBoard(1);
-	drawBoard(2);
-	setupBoard(2);
+	//~ resetBoard();
+	//~ drawBoard(1);
+	//~ setupBoard(1);
+	//~ drawBoard(2);
+	//~ setupBoard(2);
+	defaultSetup();
+	for(int player = 1;; player = player==1?2:1){
+		drawBoard(player);
+		takeTurn(player);
+	}
 	
 	getch();
 	endwin();
@@ -71,6 +77,43 @@ void clearMsg(){
 	mvaddstr(rowStart+12, colStart, "                    ");
 	mvaddstr(rowStart+13, colStart, "                    ");
 	mvaddstr(rowStart+14, colStart, "                    ");
+}
+
+void defaultSetup(){
+	//The top 4 rows are player 2
+	for(int r = 0; r < 4; r++){
+		for(int c = 0; c < 10; c++){
+			BOARD[r][c].player = 2;
+			BOARD[r][c].rank = 9;
+			BOARD[r][c].known1 = 0;
+			BOARD[r][c].known2 = 1;
+		}
+	}
+
+	//The middle two rows are lake and empty spots
+	for(int r = 4; r < 6; r++){
+		for(int c = 0; c < 10; c++){
+			if((2 <= c && c < 4) || (6 <= c && c < 8)){
+				BOARD[r][c].rank = 13; //lake spaces 
+			}
+			else{
+				BOARD[r][c].rank = 0; //free spaces
+			}
+			BOARD[r][c].player = 0;
+			BOARD[r][c].known1 = 0;
+			BOARD[r][c].known2 = 0;
+		}
+	}
+	
+	//The last 4 rows are player 1
+	for(int r = 6; r < 10; r++){
+		for(int c = 0; c < 10; c++){
+			BOARD[r][c].player = 1;
+			BOARD[r][c].rank = 9;
+			BOARD[r][c].known1 = 1;
+			BOARD[r][c].known2 = 0;
+		}
+	}
 }
 
 void setupBoard(int player){
@@ -151,11 +194,105 @@ void setupBoard(int player){
 		}
 		else if(ch == KEY_ENTER || ch == '\n'){
 			clearMsg();
-			mvaddstr(rowStart+11, colStart, "Are you done? (y/n)");
-			ch = getch();
-			if(ch == 'y' || ch == 'Y')
-				return;
+			int pieces = 0;
+			for(int x = 0; x < 12; x++){
+				if(distr[x]){
+					pieces = 1;
+					break;
+				}
+			}
+			
+			if(pieces){
+				mvaddstr(rowStart+11, colStart+2, "You are not done");
+				getch();
+			}
+			else{
+				mvaddstr(rowStart+11, colStart, "Are you done? (y/n)");
+				ch = getch();
+				if(ch == 'y' || ch == 'Y')
+					return;
+			}
 			drawDistr(distr);
+		}
+		else{
+			clearMsg();
+			char s[21];
+			sprintf(s, "%d", ch);
+			mvaddstr(rowStart+11, colStart, s);
+		}
+	}
+}
+
+
+int takeTurn(int player){
+	int printCol = colStart, printRow = rowStart+6;
+	int selRow = -1, selCol = -1;
+	selectPiece2(printRow, printCol, player);
+
+	for(;;){
+		int ch = getch();
+		if(ch == KEY_DOWN || ch == KEY_UP || ch == KEY_LEFT || ch == KEY_RIGHT){ //arrow keys
+			if(printRow-rowStart != selRow || (printCol-colStart)>>1 != selCol)
+				drawPiece2(printRow, printCol, player);
+			switch(ch){
+				case KEY_DOWN:
+					if(printRow-rowStart+1 < 10)
+						printRow++;
+					break;
+				case KEY_UP:
+					if(printRow-rowStart-1 >= 0)
+						printRow--;
+					break;
+				case KEY_RIGHT:
+					if(printCol-colStart+2 < 20)
+						printCol+=2;
+					break;
+				case KEY_LEFT:
+					if(printCol-colStart-1 >= 0)
+						printCol-=2;
+					break;
+			}
+			selectPiece2(printRow, printCol, player);
+		}
+		else if(' '){
+			int r = player==1? printRow-rowStart : 9+rowStart-printRow;
+			int c = player==1? (printCol-colStart)>>1 : 9+((colStart-printCol)>>1);
+			
+			if(BOARD[r][c].player == player){ //we selected our own piece
+				if(selRow >= 0){ //we already selected a piece. Deselect it.
+					drawPiece(selRow, selCol, player);
+				}
+				selRow = r;
+				selCol = c;
+				selectPiece(selRow, selCol, player); //select our new piece
+			}
+			else if(BOARD[r][c].player == 0){ //we chose a non-player piece
+				if(BOARD[r][c].rank == 0){ //we chose an empty space
+					BOARD[r][c] = BOARD[selRow][selCol]; //move our selected piece there
+					clearPiece(&BOARD[selRow][selCol]); //empty the space we were at
+					drawPiece(selRow, selCol, player);
+					drawPiece(r, c, player);
+					return 0;
+				}
+			}
+			else{ //we chose an opponent piece
+				
+				//~ if(player==1) //reveal it
+					//~ BOARD[r][c].known1 = 1;
+				//~ else
+					//~ BOARD[r][c].known2 = 1;
+				
+				//~ if(BOARD[r][c].rank == 12) //we won
+					//~ return 1;
+				//~ else if(BOARD[r][c].rank == 11){ //we hit a bomb
+					//~ BOARD[selRow][selCol] = {0,0,0,0}; //kill us
+					//~ BOARD[r][c] = {0,0,0,0}; //kill them
+				//~ }
+				//~ else if(BOARD[r][c]
+			}
+		}
+		else if(ch == 'q'){
+			return 0;
 		}
 		else{
 			clearMsg();

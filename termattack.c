@@ -3,6 +3,8 @@
 #include <ncurses.h>
 #include "board.h"
 
+void setupBoard(int);
+
 int main(){
 	initscr();
 	noecho();
@@ -69,4 +71,97 @@ void clearMsg(){
 	mvaddstr(rowStart+12, colStart, "                    ");
 	mvaddstr(rowStart+13, colStart, "                    ");
 	mvaddstr(rowStart+14, colStart, "                    ");
+}
+
+void setupBoard(int player){
+	int printCol = colStart, printRow = rowStart+6;
+	int distr[12] = {1, 1, 1, 2, 3, 4, 4, 4, 5, 8, 1, 6}; //flag, 1-9, spy, bomb
+	drawDistr(distr);
+	selectPiece2(printRow, printCol, player);
+
+	for(;;){
+		int ch = getch();
+		if(ch == KEY_DOWN || ch == KEY_UP || ch == KEY_LEFT || ch == KEY_RIGHT){ //arrow keys
+			drawPiece2(printRow, printCol, player);
+			switch(ch){
+				case KEY_DOWN:
+					if(printRow-rowStart+1 < 10)
+						printRow++;
+					break;
+				case KEY_UP:
+					if(printRow-rowStart-1 >= 6)
+						printRow--;
+					break;
+				case KEY_RIGHT:
+					if(printCol-colStart+2 < 20)
+						printCol+=2;
+					break;
+				case KEY_LEFT:
+					if(printCol-colStart-1 >= 0)
+						printCol-=2;
+					break;
+			}
+			selectPiece2(printRow, printCol, player);
+		}
+		else if(('1' <= ch && ch <= '9') || ch == 'f' || ch == 'b' || ch == 's' || ch == ' '){
+			int rank = ch;
+			switch(ch){
+				case ' ':
+					rank = 0;
+					break;
+				case 's':
+					rank = 10;
+					break;
+				case 'b':
+					rank = 11;
+					break;
+				case 'f':
+					rank = 12;
+					break;
+				default:
+					rank = ch-'0';
+					break;
+			}
+			
+			int r = player==1? printRow-rowStart : 9+rowStart-printRow;
+			int c = player==1? (printCol-colStart)>>1 : 9+((colStart-printCol)>>1);
+			
+			if(BOARD[r][c].rank >= 0)
+				distr[BOARD[r][c].rank%12]++;
+			
+			if(rank == 0){
+				BOARD[r][c].rank = -1;
+				if(player==1)
+					BOARD[r][c].known1 = 0;
+				else if(player==2)
+					BOARD[r][c].known2 = 0;
+
+			}
+			else if(distr[rank%12] > 0){
+				BOARD[r][c].rank = rank;
+				if(player==1)
+					BOARD[r][c].known1 = 1;
+				else if(player==2)
+					BOARD[r][c].known2 = 1;
+				distr[rank%12]--;
+			}
+			
+			selectPiece2(printRow, printCol, player);
+			drawDistr(distr);
+		}
+		else if(ch == KEY_ENTER || ch == '\n'){
+			clearMsg();
+			mvaddstr(rowStart+11, colStart, "Are you done? (y/n)");
+			ch = getch();
+			if(ch == 'y' || ch == 'Y')
+				return;
+			drawDistr(distr);
+		}
+		else{
+			clearMsg();
+			char s[21];
+			sprintf(s, "%d", ch);
+			mvaddstr(rowStart+11, colStart, s);
+		}
+	}
 }

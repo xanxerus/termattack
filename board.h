@@ -46,6 +46,4 @@ void selectPiece(int, int, int);
 void drawPiece2(int, int, int);
 void selectPiece2(int, int, int);
 
-void setupBoard(int);
-
 #endif

@@ -48,9 +48,9 @@ void resetBoard(){
 
 void drawBoard(int player){
 	int printRow = rowStart;
-	for(int row = player==1?0:9; player==1 && row < 10 || player==2 && row >= 0; player==1?row++:row--){
+	for(int row = player==1?0:9; (player==1 && row < 10) || (player==2 && row >= 0); player==1?row++:row--){
 		int printCol = colStart;
-		for(int col = player==1?0:9; player==1 && col < 10 || player==2 && col>=0; player==1?col++:col--){
+		for(int col = player==1?0:9; (player==1 && col < 10) || (player==2 && col>=0); player==1?col++:col--){
 			if(BOARD[row][col].player == 1){ //red for player 1
 				attron(COLOR_PAIR(1));
 			}
@@ -64,7 +64,7 @@ void drawBoard(int player){
 				attron(COLOR_PAIR(3));
 			}
 			
-			if(player==1 && !BOARD[row][col].known1 || player==2 && !BOARD[row][col].known2){ //draw spaces for unknown pieces
+			if((player==1 && !BOARD[row][col].known1) || (player==2 && !BOARD[row][col].known2)){ //draw spaces for unknown pieces
 				mvaddch(printRow, printCol, ' ');
 				mvaddch(printRow, 1 + printCol, ' ');
 				printCol+=2;
@@ -123,7 +123,7 @@ void drawPiece(int row, int col, int player){
 		attron(COLOR_PAIR(3));
 	}
 	
-	if(player==1 && !BOARD[row][col].known1 || player==2 && !BOARD[row][col].known2){ //draw spaces for unknown pieces
+	if((player==1 && !BOARD[row][col].known1) || (player==2 && !BOARD[row][col].known2)){ //draw spaces for unknown pieces
 		mvaddch(printRow, printCol, ' ');
 		mvaddch(printRow, 1 + printCol, ' ');
 		return;
@@ -162,7 +162,7 @@ void selectPiece(int row, int col, int player){
 
 	attron(COLOR_PAIR(4));
 	
-	if(player==1 && !BOARD[row][col].known1 || player==2 && !BOARD[row][col].known2){ //draw spaces for unknown pieces
+	if((player==1 && !BOARD[row][col].known1) || (player==2 && !BOARD[row][col].known2)){ //draw spaces for unknown pieces
 		mvaddch(printRow, printCol, ' ');
 		mvaddch(printRow, 1 + printCol, ' ');
 		return;
@@ -191,103 +191,9 @@ void selectPiece(int row, int col, int player){
 }
 
 void drawPiece2(int row, int col, int player){
-	drawPiece(row-rowStart, col-colStart>>1, player);
+	drawPiece(row-rowStart, (col-colStart)>>1, player);
 }
 
 void selectPiece2(int row, int col, int player){
-	selectPiece(row-rowStart, col-colStart>>1, player);
-}
-
-void setupBoard(int player){
-	int printCol = colStart, printRow = rowStart+6;
-	int distr[12] = {1, 1, 1, 2, 3, 4, 4, 4, 5, 8, 1, 6}; //flag, 1-9, spy, bomb
-	drawDistr(distr);
-	selectPiece2(printRow, printCol, player);
-
-	for(;;){
-		int ch = getch();
-		if(ch == KEY_DOWN || ch == KEY_UP || ch == KEY_LEFT || ch == KEY_RIGHT){ //arrow keys
-			drawPiece2(printRow, printCol, player);
-			switch(ch){
-				case KEY_DOWN:
-					if(printRow-rowStart+1 < 10)
-						printRow++;
-					break;
-				case KEY_UP:
-					if(printRow-rowStart-1 >= 6)
-						printRow--;
-					break;
-				case KEY_RIGHT:
-					if(printCol-colStart+2 < 20)
-						printCol+=2;
-					break;
-				case KEY_LEFT:
-					if(printCol-colStart-1 >= 0)
-						printCol-=2;
-					break;
-			}
-			selectPiece2(printRow, printCol, player);
-		}
-		else if('1' <= ch && ch <= '9' || ch == 'f' || ch == 'b' || ch == 's' || ch == ' '){
-			int rank = ch;
-			switch(ch){
-				case ' ':
-					rank = 0;
-					break;
-				case 's':
-					rank = 10;
-					break;
-				case 'b':
-					rank = 11;
-					break;
-				case 'f':
-					rank = 12;
-					break;
-				default:
-					rank = ch-'0';
-					break;
-			}
-			
-			int r = player==1? printRow-rowStart : 9+rowStart-printRow;
-			int c = player==1? printCol-colStart>>1 : 9+((colStart-printCol)>>1);
-			
-			if(BOARD[r][c].rank >= 0)
-				distr[BOARD[r][c].rank%12]++;
-			
-			if(rank == 0){
-				BOARD[r][c].rank = -1;
-				if(player==1)
-					BOARD[r][c].known1 = 0;
-				else if(player==2)
-					BOARD[r][c].known2 = 0;
-
-			}
-			else if(distr[rank%12] > 0){
-				BOARD[r][c].rank = rank;
-				if(player==1)
-					BOARD[r][c].known1 = 1;
-				else if(player==2)
-					BOARD[r][c].known2 = 1;
-				distr[rank%12]--;
-			}
-			
-			selectPiece2(printRow, printCol, player);
-			drawDistr(distr);
-		}
-		else if(ch == KEY_ENTER || ch == '\n'){
-			clearMsg();
-			mvaddstr(rowStart+11, colStart, "Are you done? (y/n)");
-			ch = getch();
-			if(ch == 'y' || ch == 'Y')
-				return;
-			drawDistr(distr);
-		}
-		else{
-			clearMsg();
-			char* s[21];
-			sprintf(s, "%d", ch);
-			//~ sprintf(s, "%d", KEY_ENTER);
-			mvaddstr(rowStart+11, colStart, s);
-		}
-	}
+	selectPiece(row-rowStart, (col-colStart)>>1, player);
 }

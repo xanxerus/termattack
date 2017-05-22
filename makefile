@@ -5,4 +5,7 @@ Test: Test.c
 
 clean:
 	rm Test
-	rm *.o
+#~ 	rm *.o
+
+go: clean all
+	./Test

@@ -38,6 +38,7 @@ int maxx, maxy, colStart, rowStart;
 //forward declarations
 void initsize();
 void resetBoard();
+void drawRevelation();
 
 void drawBoard(int);
 void drawPiece(int, int, int);

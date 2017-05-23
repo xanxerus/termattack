@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <ncurses.h>
 #include "board.h"
@@ -40,16 +41,24 @@ int main(){
 		return 2;
 	}
 	
-	//~ resetBoard();
+	resetBoard();
 	//~ drawBoard(1);
 	//~ setupBoard(1);
 	//~ drawBoard(2);
 	//~ setupBoard(2);
 	defaultSetup();
 
-	for(int player = 1;; player = player==1?2:1){
+	for(int player = 1; ; player = player==1?2:1){
 		drawBoard(player);
-		takeTurn(player);
+		
+		if(takeTurn(player) == 1){
+			drawRevelation();
+			getch();
+			break;
+		}
+		
+		drawBoard(player);
+		getch();
 	}
 	
 	getch();
@@ -82,12 +91,18 @@ void clearMsg(){
 
 void defaultSetup(){
 	//The top 4 rows are player 2
+	int distr[12] = {1, 1, 1, 2, 3, 4, 4, 4, 5, 8, 1, 6}; //flag, 1-9, spy, bomb
+	int i = 0;
 	for(int r = 0; r < 4; r++){
 		for(int c = 0; c < 10; c++){
 			BOARD[r][c].player = 2;
-			BOARD[r][c].rank = 9;
+			BOARD[r][c].rank = i==0?12:i;
 			BOARD[r][c].known1 = 0;
 			BOARD[r][c].known2 = 1;
+			
+			distr[i]--;
+			if(distr[i] == 0)
+				i++;
 		}
 	}
 
@@ -107,14 +122,21 @@ void defaultSetup(){
 	}
 	
 	//The last 4 rows are player 1
+	int distr2[12] = {1, 1, 1, 2, 3, 4, 4, 4, 5, 8, 1, 6}; //flag, 1-9, spy, bomb
+	i = 0;
 	for(int r = 6; r < 10; r++){
 		for(int c = 0; c < 10; c++){
 			BOARD[r][c].player = 1;
-			BOARD[r][c].rank = 9;
+			BOARD[r][c].rank = i==0?12:i;
 			BOARD[r][c].known1 = 1;
 			BOARD[r][c].known2 = 0;
+			
+			distr2[i]--;
+			if(distr2[i] == 0)
+				i++;
 		}
 	}
+
 }
 
 void setupBoard(int player){
@@ -210,8 +232,10 @@ void setupBoard(int player){
 			else{
 				mvaddstr(rowStart+11, colStart, "Are you done? (y/n)");
 				ch = getch();
-				if(ch == 'y' || ch == 'Y')
+				if(ch == 'y' || ch == 'Y'){
+					mvaddstr(rowStart+11, colStart, "                   ");
 					return;
+				}
 			}
 			drawDistr(distr);
 		}
@@ -255,29 +279,120 @@ int takeTurn(int player){
 			}
 			selectPiece2(printRow, printCol, player);
 		}
-		else if(' '){
+		else if(ch == ' '){
+			//these are board coordinates
 			int r = player==1? printRow-rowStart : 9-(printRow-rowStart);
 			int c = player==1? (printCol-colStart)>>1 : 9-((printCol-colStart)>>1);
+			int sr = selRow == -1 ? -1 : player==1 ? selRow-rowStart : 9 - (selRow-rowStart);
+			int sc = selCol == -1 ? -1 : player==1 ? (selCol-colStart)>>1 : 9 - ((selCol-colStart)>>1);
 			
 			if(BOARD[r][c].player == player){ //we selected our own piece
-				if(selRow >= 0){ //we already selected a piece. Deselect it.
-					drawPiece2(selRow, selCol, player);
+				if(1 <= BOARD[r][c].rank && BOARD[r][c].rank <= 10){ //check that it is movable
+					if(selRow >= 0){ //we already selected a piece. Deselect it.
+						drawPiece2(selRow, selCol, player);
+					}
+					selRow = printRow; //select our new piece
+					selCol = printCol;
+					selectPiece2(selRow, selCol, player);
 				}
-				selRow = printRow;
-				selCol = printCol;
-				selectPiece2(selRow, selCol, player); //select our new piece
 			}
-			else if(BOARD[r][c].player == 0){ //we chose a non-player piece
-				if(BOARD[r][c].rank == 0 && selRow >= 0){ //we chose an empty space and have a piece selected
-					int sr = player==1 ? selRow-rowStart : 9 - (selRow-rowStart);
-					int sc = player==1 ? (selCol-colStart)>>1 : 9 - ((selCol-colStart)>>1);
+			else if(selRow >= 0){ //we chose a non-player piece and have a piece selected
+				//check movement permission
+				int validMove = 1;
+				
+				if(BOARD[sr][sc].rank == 9){ //we picked a 9
+					if(r-sr == 0){ //our move is on the row
+						if(c == sc){ //we didn't move. Invalid
+							validMove = 0;
+						}
+						else{
+							for(int pCol = c<sc?c+1:sc+1; (c<sc && pCol < sc) || (sc<c && pCol < c); pCol++){
+								if(BOARD[r][pCol].rank != 0){ //there is a piece in our way. Invalid
+									validMove = 0;
+									break;
+								}
+							}
+						}
+					}
+					else if(c-sc == 0){ //our move is on the column
+						for(int pRow = r<sr?r+1:sr+1; (r<sr && pRow < sr) || (sr<r && pRow < r); pRow++){
+							if(BOARD[pRow][c].rank != 0){ //there is a piece in our way. Invalid
+								validMove = 0;
+								break;
+							}
+						}
+					}
+					else{ //our move did not maintain a row or a column
+						validMove = 0;
+					}
+				}
+				else{ //we picked not a 9
+					if(!((abs(r-sr) != 1) ^ (abs(c-sc) != 1)))
+						validMove = 0;
+				}
+
+				if(validMove && BOARD[r][c].rank < 13){
+					char o = ' ';
+					switch(BOARD[r][c].rank){
+						case 0: //empty
+							break;
+						case 10: //spy
+							o = 'S';
+							break;
+						case 11: //bomb
+							o = 'B';
+							break;
+						case 12: //flag
+							o = 'F';
+							break;
+						case 13: //lake
+							break;
+						default: //1 through 9
+							o = BOARD[r][c].rank + 48;
+							break;
+					}
 					
+					if(o != ' '){
+						mvaddstr(rowStart+11, colStart+3, "Attacked a ");
+						mvaddch(rowStart+11, colStart+14, o);
+					}
 					
-					BOARD[r][c] = BOARD[sr][sc]; //move our selected piece there
-					clearPiece(&BOARD[sr][sc]); //empty the space we were at
+					if(BOARD[r][c].rank == 12){ //we win the game
+						BOARD[r][c].known1 = 1; //reveal to all
+						BOARD[r][c].known2 = 1;
+						return 1;
+					}
+					else if(BOARD[sr][sc].rank == BOARD[r][c].rank || //it's a draw
+						   (BOARD[r][c].rank == 11 && BOARD[sr][sc].rank != 8)){ //or they're a bomb and we're not a miner
+						clearPiece(&BOARD[sr][sc]);
+						clearPiece(&BOARD[r][c]);
+					}
+					else if(BOARD[sr][sc].rank < BOARD[r][c].rank || //we win
+						   (BOARD[r][c].rank == 11 && BOARD[sr][sc].rank == 8) || //or they're a bomb and we're a miner
+						   (BOARD[r][c].rank == 1 && BOARD[sr][sc].rank == 10) || //or they're a 1 and we're a spy
+						   (BOARD[r][c].rank == 0)){ //or they're empty space
+						BOARD[r][c] = BOARD[sr][sc]; //we take over
+						clearPiece(&BOARD[sr][sc]); //clear the old spot
+					}
+					else if(BOARD[sr][sc].rank > BOARD[r][c].rank){ //we lose
+						clearPiece(&BOARD[sr][sc]); //we die
+						BOARD[r][c].known1 = 1; //reveal to all
+						BOARD[r][c].known2 = 1;
+					}
+					
+					if(o != ' ')
+						mvaddstr(rowStart+11, colStart+3, "            ");
+
 					drawPiece2(selRow, selCol, player);
 					drawPiece2(printRow, printCol, player);
 					return 0;
+				}
+				else{ //we are trying to violate movement permission.
+					attron(COLOR_PAIR(5));
+					mvaddstr(rowStart+11, colStart+3, "Invalid move");
+					getch();
+					mvaddstr(rowStart+11, colStart+3, "            ");
+					
 				}
 			}
 			else{ //we chose an opponent piece

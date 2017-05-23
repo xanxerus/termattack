@@ -46,7 +46,58 @@ void resetBoard(){
 	}
 }
 
+void drawRevelation(){
+	attron(COLOR_PAIR(5));
+	int printCol = colStart;
+	for(int row = 0; row < 10; row++){
+		int printRow = rowStart+9;
+		for(int col = 0; col < 10; col++){
+			if(BOARD[row][col].player == 1){ //red for player 1
+				attron(COLOR_PAIR(1));
+			}
+			else if(BOARD[row][col].player == 2){ //blue for player 2
+				attron(COLOR_PAIR(2));
+			}
+			else if(!BOARD[row][col].rank){ //black for empty spaces
+				attron(COLOR_PAIR(5));
+			}
+			else{ //cyan for everything else
+				attron(COLOR_PAIR(3));
+			}
+			
+			switch(BOARD[row][col].rank){
+				case 0: //empty
+					mvaddch(printRow, printCol, ' ');
+					break;
+				case 10: //spy
+					mvaddch(printRow, printCol, 'S');
+					break;
+				case 11: //bomb
+					mvaddch(printRow, printCol, 'B');
+					break;
+				case 12: //flag
+					mvaddch(printRow, printCol, 'F');
+					break;
+				case 13: //lake
+					mvaddch(printRow, printCol, ' ');
+					break;
+				default: //1 through 9
+					mvaddch(printRow, printCol, BOARD[row][col].rank + 48);
+					break;
+			}
+			
+			//draw the second space
+			mvaddch(printRow, 1 + printCol, ' ');
+			printRow--;
+		}
+		printCol+=2;
+	}
+	
+	refresh();
+}
+
 void drawBoard(int player){
+	attron(COLOR_PAIR(5));
 	int printRow = rowStart;
 	for(int row = player==1?0:9; (player==1 && row < 10) || (player==2 && row >= 0); player==1?row++:row--){
 		int printCol = colStart;
@@ -73,6 +124,7 @@ void drawBoard(int player){
 
 			switch(BOARD[row][col].rank){
 				case 0: //empty
+					mvaddch(printRow, printCol, ' ');
 					break;
 				case 10: //spy
 					mvaddch(printRow, printCol, 'S');
@@ -84,6 +136,7 @@ void drawBoard(int player){
 					mvaddch(printRow, printCol, 'F');
 					break;
 				case 13: //lake
+					mvaddch(printRow, printCol, ' ');
 					break;
 				default: //1 through 9
 					mvaddch(printRow, printCol, BOARD[row][col].rank + 48);
@@ -152,6 +205,7 @@ void drawPiece(int row, int col, int player){
 }
 
 void selectPiece(int row, int col, int player){
+	attron(COLOR_PAIR(4));
 	int printRow = rowStart + row; //always print in the spot asked 
 	int printCol = colStart + (col<<1);
 
@@ -159,8 +213,6 @@ void selectPiece(int row, int col, int player){
 		row = 9-row;
 		col = 9-col;
 	}
-
-	attron(COLOR_PAIR(4));
 	
 	if((player==1 && !BOARD[row][col].known1) || (player==2 && !BOARD[row][col].known2)){ //draw spaces for unknown pieces
 		mvaddch(printRow, printCol, ' ');

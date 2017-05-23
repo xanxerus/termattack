@@ -46,6 +46,7 @@ int main(){
 	//~ drawBoard(2);
 	//~ setupBoard(2);
 	defaultSetup();
+
 	for(int player = 1;; player = player==1?2:1){
 		drawBoard(player);
 		takeTurn(player);
@@ -226,13 +227,13 @@ void setupBoard(int player){
 
 int takeTurn(int player){
 	int printCol = colStart, printRow = rowStart+6;
-	int selRow = -1, selCol = -1;
+	int selRow = -1, selCol = -1; //print coordinates, not board coordinates
 	selectPiece2(printRow, printCol, player);
 
 	for(;;){
 		int ch = getch();
 		if(ch == KEY_DOWN || ch == KEY_UP || ch == KEY_LEFT || ch == KEY_RIGHT){ //arrow keys
-			if(printRow-rowStart != selRow || (printCol-colStart)>>1 != selCol)
+			if(printRow != selRow || printCol != selCol)
 				drawPiece2(printRow, printCol, player);
 			switch(ch){
 				case KEY_DOWN:
@@ -255,23 +256,27 @@ int takeTurn(int player){
 			selectPiece2(printRow, printCol, player);
 		}
 		else if(' '){
-			int r = player==1? printRow-rowStart : 9+rowStart-printRow;
-			int c = player==1? (printCol-colStart)>>1 : 9+((colStart-printCol)>>1);
+			int r = player==1? printRow-rowStart : 9-(printRow-rowStart);
+			int c = player==1? (printCol-colStart)>>1 : 9-((printCol-colStart)>>1);
 			
 			if(BOARD[r][c].player == player){ //we selected our own piece
 				if(selRow >= 0){ //we already selected a piece. Deselect it.
-					drawPiece(selRow, selCol, player);
+					drawPiece2(selRow, selCol, player);
 				}
-				selRow = r;
-				selCol = c;
-				selectPiece(selRow, selCol, player); //select our new piece
+				selRow = printRow;
+				selCol = printCol;
+				selectPiece2(selRow, selCol, player); //select our new piece
 			}
 			else if(BOARD[r][c].player == 0){ //we chose a non-player piece
-				if(BOARD[r][c].rank == 0){ //we chose an empty space
-					BOARD[r][c] = BOARD[selRow][selCol]; //move our selected piece there
-					clearPiece(&BOARD[selRow][selCol]); //empty the space we were at
-					drawPiece(selRow, selCol, player);
-					drawPiece(r, c, player);
+				if(BOARD[r][c].rank == 0 && selRow >= 0){ //we chose an empty space and have a piece selected
+					int sr = player==1 ? selRow-rowStart : 9 - (selRow-rowStart);
+					int sc = player==1 ? (selCol-colStart)>>1 : 9 - ((selCol-colStart)>>1);
+					
+					
+					BOARD[r][c] = BOARD[sr][sc]; //move our selected piece there
+					clearPiece(&BOARD[sr][sc]); //empty the space we were at
+					drawPiece2(selRow, selCol, player);
+					drawPiece2(printRow, printCol, player);
 					return 0;
 				}
 			}

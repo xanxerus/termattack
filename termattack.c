@@ -37,28 +37,48 @@ int main(){
 	initsize();
 	if( maxx < 25 || maxy < 10 ){
 		endwin();
-		printf("Your terminal (%dx%d) is too small. Must be at least 25x10\n", maxx, maxy);
+		printf("Your terminal (%dx%d) is too small. Must be at least 20x13\n", maxx, maxy);
 		return 2;
 	}
 	
 	resetBoard();
-	//~ drawBoard(1);
-	//~ setupBoard(1);
-	//~ drawBoard(2);
-	//~ setupBoard(2);
-	defaultSetup();
+	drawBoard(1);
+	setupBoard(1);
+	drawBoard(2);
+	setupBoard(2);
+	//~ defaultSetup();
 
 	for(int player = 1; ; player = player==1?2:1){
+		clear();
+		attron(COLOR_PAIR(5));
+		mvaddstr(rowStart+5, colStart+6, "Player ");
+		mvaddch(rowStart+5, colStart+13, player + 48);
+		getch();
+
+		mvaddstr(rowStart+5, colStart+6, "        ");
 		drawBoard(player);
 		
-		if(takeTurn(player) == 1){
+		int turn = takeTurn(player);
+		
+		if(turn == 12){
 			drawRevelation();
-			getch();
+			attron(COLOR_PAIR(5));
+			mvaddstr(rowStart+11, colStart+3, "Player ");
+			mvaddch(rowStart+11, colStart+10, player + 48);
+			mvaddstr(rowStart+11, colStart+11, " wins!");
+
 			break;
 		}
-		
-		drawBoard(player);
-		getch();
+		else{
+			drawBoard(player);
+			if(turn){
+				attron(COLOR_PAIR(5));
+				mvaddstr(rowStart+11, colStart+3, "Attacked a ");
+				mvaddch(rowStart+11, colStart+14, decodeRank(turn));
+				getch();
+				mvaddstr(rowStart+11, colStart+3, "            ");
+			}
+		}
 	}
 	
 	getch();
@@ -78,7 +98,6 @@ void drawDistr(int* distr){
 
 	sprintf(s, "6: %d 7: %d 8: %d 9: %d", distr[6], distr[7], distr[8], distr[9]);
 	mvaddstr(rowStart+13, colStart, s);
-
 }
 
 void clearMsg(){
@@ -86,7 +105,6 @@ void clearMsg(){
 	mvaddstr(rowStart+11, colStart, "                    ");
 	mvaddstr(rowStart+12, colStart, "                    ");
 	mvaddstr(rowStart+13, colStart, "                    ");
-	mvaddstr(rowStart+14, colStart, "                    ");
 }
 
 void defaultSetup(){
@@ -228,6 +246,7 @@ void setupBoard(int player){
 			if(pieces){
 				mvaddstr(rowStart+11, colStart+2, "You are not done");
 				getch();
+				mvaddstr(rowStart+11, colStart+2, "                ");
 			}
 			else{
 				mvaddstr(rowStart+11, colStart, "Are you done? (y/n)");
@@ -297,70 +316,11 @@ int takeTurn(int player){
 				}
 			}
 			else if(selRow >= 0){ //we chose a non-player piece and have a piece selected
-				//check movement permission
-				int validMove = 1;
-				
-				if(BOARD[sr][sc].rank == 9){ //we picked a 9
-					if(r-sr == 0){ //our move is on the row
-						if(c == sc){ //we didn't move. Invalid
-							validMove = 0;
-						}
-						else{
-							for(int pCol = c<sc?c+1:sc+1; (c<sc && pCol < sc) || (sc<c && pCol < c); pCol++){
-								if(BOARD[r][pCol].rank != 0){ //there is a piece in our way. Invalid
-									validMove = 0;
-									break;
-								}
-							}
-						}
-					}
-					else if(c-sc == 0){ //our move is on the column
-						for(int pRow = r<sr?r+1:sr+1; (r<sr && pRow < sr) || (sr<r && pRow < r); pRow++){
-							if(BOARD[pRow][c].rank != 0){ //there is a piece in our way. Invalid
-								validMove = 0;
-								break;
-							}
-						}
-					}
-					else{ //our move did not maintain a row or a column
-						validMove = 0;
-					}
-				}
-				else{ //we picked not a 9
-					if(!((abs(r-sr) != 1) ^ (abs(c-sc) != 1)))
-						validMove = 0;
-				}
-
-				if(validMove && BOARD[r][c].rank < 13){
-					char o = ' ';
-					switch(BOARD[r][c].rank){
-						case 0: //empty
-							break;
-						case 10: //spy
-							o = 'S';
-							break;
-						case 11: //bomb
-							o = 'B';
-							break;
-						case 12: //flag
-							o = 'F';
-							break;
-						case 13: //lake
-							break;
-						default: //1 through 9
-							o = BOARD[r][c].rank + 48;
-							break;
-					}
-					
-					if(o != ' '){
-						mvaddstr(rowStart+11, colStart+3, "Attacked a ");
-						mvaddch(rowStart+11, colStart+14, o);
-					}
-					
+				if(checkValidity(sr, sc, r, c) && BOARD[r][c].rank < 13){
+					int ret = BOARD[r][c].rank;
 					if(BOARD[r][c].rank == 12){ //we win the game
 						BOARD[r][c].known1 = 1; //reveal to all
 						BOARD[r][c].known2 = 1;
-						return 1;
 					}
 					else if(BOARD[sr][sc].rank == BOARD[r][c].rank || //it's a draw
 						   (BOARD[r][c].rank == 11 && BOARD[sr][sc].rank != 8)){ //or they're a bomb and we're not a miner
@@ -380,45 +340,17 @@ int takeTurn(int player){
 						BOARD[r][c].known2 = 1;
 					}
 					
-					if(o != ' ')
-						mvaddstr(rowStart+11, colStart+3, "            ");
-
 					drawPiece2(selRow, selCol, player);
 					drawPiece2(printRow, printCol, player);
-					return 0;
+					return ret;
 				}
 				else{ //we are trying to violate movement permission.
 					attron(COLOR_PAIR(5));
 					mvaddstr(rowStart+11, colStart+3, "Invalid move");
 					getch();
 					mvaddstr(rowStart+11, colStart+3, "            ");
-					
 				}
 			}
-			else{ //we chose an opponent piece
-				
-				//~ if(player==1) //reveal it
-					//~ BOARD[r][c].known1 = 1;
-				//~ else
-					//~ BOARD[r][c].known2 = 1;
-				
-				//~ if(BOARD[r][c].rank == 12) //we won
-					//~ return 1;
-				//~ else if(BOARD[r][c].rank == 11){ //we hit a bomb
-					//~ BOARD[selRow][selCol] = {0,0,0,0}; //kill us
-					//~ BOARD[r][c] = {0,0,0,0}; //kill them
-				//~ }
-				//~ else if(BOARD[r][c]
-			}
-		}
-		else if(ch == 'q'){
-			return 0;
-		}
-		else{
-			clearMsg();
-			char s[21];
-			sprintf(s, "%d", ch);
-			mvaddstr(rowStart+11, colStart, s);
 		}
 	}
 }

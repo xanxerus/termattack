@@ -36,6 +36,9 @@ Piece BOARD[10][10];
 int maxx, maxy, colStart, rowStart;
 
 //forward declarations
+int checkValidity(int, int, int, int);
+char decodeRank(int rank);
+
 void initsize();
 void resetBoard();
 void drawRevelation();

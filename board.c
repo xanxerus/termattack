@@ -1,7 +1,57 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <ncurses.h>
 #include "board.h"
+
+int checkValidity(int sr, int sc, int r, int c){
+	if(BOARD[sr][sc].rank == 9){ //we picked a 9
+		if(r == sr){ //our move is on the row
+			if(c == sc){ //we didn't move. Invalid
+				return 0;
+			}
+			else{
+				for(int pCol = c<sc?c+1:sc+1; (c<sc && pCol < sc) || (sc<c && pCol < c); pCol++){
+					if(BOARD[r][pCol].rank != 0){ //there is a piece in our way. Invalid
+						return 0;
+					}
+				}
+			}
+		}
+		else if(c == sc){ //our move is on the column
+			for(int pRow = r<sr?r+1:sr+1; (r<sr && pRow < sr) || (sr<r && pRow < r); pRow++){
+				if(BOARD[pRow][c].rank != 0){ //there is a piece in our way. Invalid
+					return 0;
+				}
+			}
+		}
+		else{ //our move did not maintain a row or a column
+			return 0;
+		}
+		return 1;
+	}
+	else{ //we picked not a 9
+		if((abs(r-sr) == 1 && c==sc) || (abs(c-sc) == 1 && r==sr))
+			return 1;
+		return 0;
+	}
+}
+
+char decodeRank(int rank){
+	switch(rank){
+		case 0: //empty
+		case 13: //lake
+			return ' ';
+		case 10: //spy
+			return 'S';
+		case 11: //bomb
+			return 'B';
+		case 12: //flag
+			return 'F';
+		default: //1 through 9
+			return rank + 48;
+	}
+}
 
 void initsize(){
 	getmaxyx(stdscr, maxy, maxx);
@@ -65,29 +115,8 @@ void drawRevelation(){
 				attron(COLOR_PAIR(3));
 			}
 			
-			switch(BOARD[row][col].rank){
-				case 0: //empty
-					mvaddch(printRow, printCol, ' ');
-					break;
-				case 10: //spy
-					mvaddch(printRow, printCol, 'S');
-					break;
-				case 11: //bomb
-					mvaddch(printRow, printCol, 'B');
-					break;
-				case 12: //flag
-					mvaddch(printRow, printCol, 'F');
-					break;
-				case 13: //lake
-					mvaddch(printRow, printCol, ' ');
-					break;
-				default: //1 through 9
-					mvaddch(printRow, printCol, BOARD[row][col].rank + 48);
-					break;
-			}
-			
-			//draw the second space
-			mvaddch(printRow, 1 + printCol, ' ');
+			mvaddch(printRow, printCol, decodeRank(BOARD[row][col].rank));
+			mvaddch(printRow, printCol + 1, ' ');
 			printRow--;
 		}
 		printCol+=2;
@@ -122,29 +151,8 @@ void drawBoard(int player){
 				continue;
 			}
 
-			switch(BOARD[row][col].rank){
-				case 0: //empty
-					mvaddch(printRow, printCol, ' ');
-					break;
-				case 10: //spy
-					mvaddch(printRow, printCol, 'S');
-					break;
-				case 11: //bomb
-					mvaddch(printRow, printCol, 'B');
-					break;
-				case 12: //flag
-					mvaddch(printRow, printCol, 'F');
-					break;
-				case 13: //lake
-					mvaddch(printRow, printCol, ' ');
-					break;
-				default: //1 through 9
-					mvaddch(printRow, printCol, BOARD[row][col].rank + 48);
-					break;
-			}
-			
-			//draw the second space
-			mvaddch(printRow, 1 + printCol, ' ');
+			mvaddch(printRow, printCol, decodeRank(BOARD[row][col].rank));
+			mvaddch(printRow, printCol + 1, ' ');
 			printCol+=2;
 		}
 		printRow++;
@@ -182,26 +190,8 @@ void drawPiece(int row, int col, int player){
 		return;
 	}
 
-	switch(BOARD[row][col].rank){
-		case 0: //empty
-		case 13: //lake
-			break;
-		case 10: //spy
-			mvaddch(printRow, printCol, 'S');
-			break;
-		case 11: //bomb
-			mvaddch(printRow, printCol, 'B');
-			break;
-		case 12: //flag
-			mvaddch(printRow, printCol, 'F');
-			break;
-		default: //1 through 9
-			mvaddch(printRow, printCol, BOARD[row][col].rank + 48);
-			break;
-	}
-	
-	//draw the second space
-	mvaddch(printRow, 1 + printCol, ' ');
+	mvaddch(printRow, printCol, decodeRank(BOARD[row][col].rank));
+	mvaddch(printRow, printCol + 1, ' ');
 }
 
 void selectPiece(int row, int col, int player){
@@ -220,26 +210,8 @@ void selectPiece(int row, int col, int player){
 		return;
 	}
 
-	switch(BOARD[row][col].rank){
-		case 0: //empty
-		case 13: //lake
-			break;
-		case 10: //spy
-			mvaddch(printRow, printCol, 'S');
-			break;
-		case 11: //bomb
-			mvaddch(printRow, printCol, 'B');
-			break;
-		case 12: //flag
-			mvaddch(printRow, printCol, 'F');
-			break;
-		default: //1 through 9
-			mvaddch(printRow, printCol, BOARD[row][col].rank + 48);
-			break;
-	}
-	
-	//draw the second space
-	mvaddch(printRow, 1 + printCol, ' ');
+	mvaddch(printRow, printCol, decodeRank(BOARD[row][col].rank));
+	mvaddch(printRow, printCol + 1, ' ');
 }
 
 void drawPiece2(int row, int col, int player){

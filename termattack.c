@@ -48,6 +48,7 @@ int main(){
 	setupBoard(2);
 	//~ defaultSetup();
 
+	int turn = 0;
 	for(int player = 1; ; player = player==1?2:1){
 		clear();
 		attron(COLOR_PAIR(5));
@@ -55,10 +56,17 @@ int main(){
 		mvaddch(rowStart+5, colStart+13, player + 48);
 		getch();
 
+		
 		mvaddstr(rowStart+5, colStart+6, "        ");
 		drawBoard(player);
 		
-		int turn = takeTurn(player);
+		if(turn > 0){
+			attron(COLOR_PAIR(5));
+			mvaddstr(rowStart+11, colStart+5, "Attacked ");
+			mvaddch(rowStart+11, colStart+14, decodeRank(turn));
+		}
+
+		turn = takeTurn(player);
 		
 		if(turn == 12){
 			drawRevelation();
@@ -73,10 +81,10 @@ int main(){
 			drawBoard(player);
 			if(turn){
 				attron(COLOR_PAIR(5));
-				mvaddstr(rowStart+11, colStart+3, "Attacked a ");
+				mvaddstr(rowStart+11, colStart+5, "Attacked ");
 				mvaddch(rowStart+11, colStart+14, decodeRank(turn));
 				getch();
-				mvaddstr(rowStart+11, colStart+3, "            ");
+				//~ mvaddstr(rowStart+11, colStart+3, "            ");
 			}
 		}
 	}
@@ -210,7 +218,7 @@ void setupBoard(int player){
 			int r = player==1? printRow-rowStart : 9+rowStart-printRow;
 			int c = player==1? (printCol-colStart)>>1 : 9+((colStart-printCol)>>1);
 			
-			if(BOARD[r][c].rank >= 0)
+			if(BOARD[r][c].rank >= 0 && (rank == 0 || distr[rank] > 0))
 				distr[BOARD[r][c].rank%12]++;
 			
 			if(rank == 0){
@@ -219,7 +227,6 @@ void setupBoard(int player){
 					BOARD[r][c].known1 = 0;
 				else if(player==2)
 					BOARD[r][c].known2 = 0;
-
 			}
 			else if(distr[rank%12] > 0){
 				BOARD[r][c].rank = rank;

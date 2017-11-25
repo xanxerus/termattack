@@ -3,6 +3,7 @@
 
 /*
  *    Piece    Rank    Quantity
+ *   Unknown    -1
  *    Empty      0       12
  *      1        1        1
  *      2        2        1
@@ -23,13 +24,19 @@
  * 
  */
 
-//struct
 typedef struct {
 	int player;
 	int rank;
 	int known1;
 	int known2;
 } Piece;
+
+typedef struct {
+	int sr; //source row
+	int sc; //source col
+	int dr; //destination row
+	int dc; //destination col
+} Move;
 
 //global variables (!)
 Piece BOARD[10][10];
@@ -45,9 +52,9 @@ void drawRevelation();
 
 void drawBoard(int);
 void drawPiece(int, int, int);
-void selectPiece(int, int, int);
-
 void drawPiece2(int, int, int);
+
+void selectPiece(int, int, int);
 void selectPiece2(int, int, int);
 
 void clearPiece(Piece*);

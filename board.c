@@ -4,7 +4,13 @@
 #include <ncurses.h>
 #include "board.h"
 
+/**
+ * Check if a the piece at BOARD[sr][sc] can move to BOARD[r][c].
+ */
 int checkValidity(int sr, int sc, int r, int c){
+	if(BOARD[r][c].rank == 13) //we tried to jump in a lake
+		return 0;
+	
 	if(BOARD[sr][sc].rank == 9){ //we picked a 9
 		if(r == sr){ //our move is on the row
 			if(c == sc){ //we didn't move. Invalid
@@ -37,6 +43,9 @@ int checkValidity(int sr, int sc, int r, int c){
 	}
 }
 
+/**
+ * Return a char denoting a given rank.
+ */
 char decodeRank(int rank){
 	switch(rank){
 		case 0: //empty
@@ -53,12 +62,22 @@ char decodeRank(int rank){
 	}
 }
 
+/**
+ * Initialize global variables pertaining to window size
+ */
 void initsize(){
 	getmaxyx(stdscr, maxy, maxx);
 	colStart = (maxx-20)>>1;
 	rowStart = (maxy-10)>>1;
 }
 
+/**
+ * Set all board pieces to default values. Namely:
+ * 
+ * The top four rows are player 2, -1 rank, unknown to both players. 
+ * The middle two rows are either lake or empty.
+ * The bottom four rows are player 1, -1 rank, unknown to both players.
+ */
 void resetBoard(){
 	//The top 4 rows are player 2
 	for(int r = 0; r < 4; r++){
@@ -96,6 +115,9 @@ void resetBoard(){
 	}
 }
 
+/**
+ * Print the board sideways with all pieces revealed.
+ */
 void drawRevelation(){
 	attron(COLOR_PAIR(5));
 	int printCol = colStart;
@@ -125,6 +147,9 @@ void drawRevelation(){
 	refresh();
 }
 
+/**
+ * Print the board from the player's perspective
+ */
 void drawBoard(int player){
 	attron(COLOR_PAIR(5));
 	int printRow = rowStart;
@@ -161,6 +186,12 @@ void drawBoard(int player){
 	refresh();
 }
 
+/**
+ * Given a row, col, and player, print the piece at BOARD[row][col]
+ * from the player's perspective. 
+ * 
+ * Here, row and col are relative to the board.
+ */
 void drawPiece(int row, int col, int player){
 	int printRow = rowStart + row; //always print in the spot asked 
 	int printCol = colStart + (col<<1);
@@ -194,6 +225,12 @@ void drawPiece(int row, int col, int player){
 	mvaddch(printRow, printCol + 1, ' ');
 }
 
+/**
+ * Given a row, col, and player, highlight the piece at BOARD[row][col]
+ * from the player's perspective. 
+ * 
+ * Here, row and col are relative to the board.
+ */
 void selectPiece(int row, int col, int player){
 	attron(COLOR_PAIR(4));
 	int printRow = rowStart + row; //always print in the spot asked 
@@ -214,14 +251,31 @@ void selectPiece(int row, int col, int player){
 	mvaddch(printRow, printCol + 1, ' ');
 }
 
+/**
+ * Given a row, col, and player, print the piece at BOARD[row][col]
+ * from the player's perspective.
+ * 
+ * Here, row and col are relative to the graphics, not the BOARD,
+ * so row becomes row - rowStart and col becomes (col - colStart) / 2.
+ */
 void drawPiece2(int row, int col, int player){
 	drawPiece(row-rowStart, (col-colStart)>>1, player);
 }
 
+/**
+ * Given a row, col, and player, highlight the piece at BOARD[row][col]
+ * from the player's perspective.
+ * 
+ * Here, row and col are relative to the graphics, not the BOARD,
+ * so row becomes row - rowStart and col becomes (col - colStart) / 2.
+ */
 void selectPiece2(int row, int col, int player){
 	selectPiece(row-rowStart, (col-colStart)>>1, player);
 }
 
+/**
+ * Zero out the values of a piece. Could also do memset, but eh.
+ */
 void clearPiece(Piece* piece){
 	piece->player = 0;
 	piece->rank = 0;

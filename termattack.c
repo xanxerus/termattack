@@ -4,11 +4,31 @@
 #include <ncurses.h>
 #include "board.h"
 
-void setupBoard(int);
-int takeTurn(int);
-void defaultSetup();
+//for read
+#include <unistd.h>
 
-int main(){
+//for socket and send
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+
+//for inet_pton
+#include <arpa/inet.h>
+
+void setupBoard(int);
+Move takeTurn(int);
+int makeMove(Move);
+void defaultSetup();
+void clearMsg();
+void drawDistr(int* distr);
+int offlineGame(int);
+int onlineGame(int, int, int);
+int startClient(int, char*);
+int startServer(int);
+int sendMove(int, Move);
+int readMove(int);
+
+int main(int argc, char** argv){
 	initscr();
 	noecho();
 	keypad(stdscr, TRUE);
@@ -41,12 +61,268 @@ int main(){
 		return 2;
 	}
 	
+	int naiveFlag = 0, serverFlag = 0, clientFlag = 0, helpFlag = 0;
+	char* IP;
+	int PORT;
+	
+	for(int i = 1; i < argc; i++){
+		if(strcmp(argv[i], "--naive") == 0){
+			naiveFlag = 1;
+		}
+		else if(strcmp(argv[i], "--server") == 0){
+			serverFlag = 1;
+			
+			if(i+1 >= argc || clientFlag){
+				helpFlag = 1;
+			}
+			else{
+				PORT = atoi(argv[i+1]);
+			}
+		}
+		else if(strcmp(argv[i], "--client") == 0){
+			clientFlag = 1;
+			
+			if(i+2 >= argc || serverFlag){
+				helpFlag = 1;
+			}
+			else{
+				IP = argv[i+1];
+				PORT = atoi(argv[i+2]);
+			}
+		}
+		else if(strcmp(argv[i], "--help") == 0)
+			helpFlag = 1;
+	}
+	
+	int winner = -1;
+	if(helpFlag){
+		endwin();
+		printf("Usage:\n\ttermattack [--naive] --server PORT\n\tor\n\ttermattack [--naive] [--client IP PORT]\n");
+		return 0;
+	}
+	else if(serverFlag || clientFlag){
+		int sock = serverFlag ? startServer(PORT) : startClient(PORT, IP);
+		
+		if(sock < 0){
+			endwin();
+			printf("Something TCP related failed.\n");
+			return -1;
+		}
+		
+		winner = onlineGame(naiveFlag, sock, !serverFlag+1);
+		
+	}
+	else{
+		winner = offlineGame(naiveFlag);
+	}
+	
+	if(winner < 0){
+		clear();
+		mvaddstr(rowStart+11, colStart+7, "Connection lost!");
+		getch();
+		return -1;
+	}
+	else{
+		clear();
+		drawRevelation();
+		attron(COLOR_PAIR(5));
+		mvaddstr(rowStart+11, colStart+3, "Player ");
+		mvaddch(rowStart+11, colStart+10, winner + 48);
+		mvaddstr(rowStart+11, colStart+11, " wins!");
+		refresh();
+		getch();
+	}
+	endwin();
+	return 0;
+}
+
+int startServer(int port){
+	//Make socket
+	int server_socket = socket(AF_INET, SOCK_STREAM, 0);
+	if(server_socket < 0){
+		return -1;
+	}
+	
+	//Bind to port
+	struct sockaddr_in address;
+	address.sin_family = AF_INET; //IPv4
+	address.sin_addr.s_addr = INADDR_ANY; //no idea what this does
+	address.sin_port = htons(port); //set port
+	
+	if(bind(server_socket, (struct sockaddr*) &address, sizeof(address))){
+		return -1;
+	}
+	
+	//listen for clients
+	if(listen(server_socket, 1)){
+		return -1;
+	}
+	
+	mvaddstr(rowStart+12, colStart, "Waiting on client...");
+	refresh();
+	int addrlen = sizeof(address); //manpage says I need this
+	
+	return accept(server_socket, (struct sockaddr*) &address, (socklen_t*) &addrlen);
+}
+
+int startClient(int port, char* ip){
+	//Make socket
+	int client_socket = socket(AF_INET, SOCK_STREAM, 0);
+	if(client_socket < 0){
+		return -1;
+	}
+
+	//Set IP address for the server 
+	struct sockaddr_in address;
+	memset(&address, '0', sizeof(address));
+	address.sin_family = AF_INET;
+	address.sin_port = htons(port);
+	if(inet_pton(AF_INET, ip, &address.sin_addr)<=0){
+		return -1;
+	}
+
+	//try to connect to server
+	if (connect(client_socket, (struct sockaddr *)&address, sizeof(address)) < 0){
+		return -1;
+	}
+	return client_socket;
+}
+
+/**
+ * Play an online game. If naive is true, default setup is used.
+ * Returns the winning player's number.
+ */
+int onlineGame(int naive, int socket, int truePlayer){
 	resetBoard();
-	drawBoard(1);
-	setupBoard(1);
-	drawBoard(2);
-	setupBoard(2);
-	//~ defaultSetup();
+	
+	if(naive){
+		defaultSetup();
+	}
+	else{
+		drawBoard(1);
+		setupBoard(1);
+	}
+	
+	int turn = 0;
+	for(int player = 1; ; player = player==1?2:1){
+		//print the board for truePlayer
+		clear();
+		attron(COLOR_PAIR(5));
+		drawBoard(truePlayer);
+		
+		if(player == truePlayer){
+			if(turn < 0){ //readMove failed
+				return -1;
+			}
+
+			//print what was just attacked
+			if(turn > 0){
+				attron(COLOR_PAIR(5));
+				mvaddstr(rowStart+11, colStart+3, "Opponent hit ");
+				mvaddch(rowStart+11, colStart+16, decodeRank(turn));
+			}
+			if(turn == 12)
+				return player;
+			
+			refresh();
+			Move move = takeTurn(player);
+			turn = sendMove(socket, move);
+			
+			if(turn < 0){ //sendMove failed
+				return -1;
+			}
+			
+			drawPiece(move.sr, move.sc, player);
+			drawPiece(move.dr, move.dc, player);
+			
+			if(turn == 12){
+				return player;
+			}
+			else{
+				drawBoard(player);
+				if(turn){
+					attron(COLOR_PAIR(5));
+					mvaddstr(rowStart+11, colStart+5, "Attacked ");
+					mvaddch(rowStart+11, colStart+14, decodeRank(turn));
+					getch();
+				}
+			}
+		}
+		else{
+			mvaddstr(rowStart+11, colStart+5, "Waiting on opponent.");
+			refresh();
+			turn = readMove(socket);
+			if(turn == 12)
+				return player;
+		}
+	}
+	
+	return 0;
+}
+
+/**
+ * Sends a move and the rank of the source tile via TCP socket.
+ * Recieves a rank from the other player and updates the board.
+ * Finally, performs the given move.
+ * 
+ * Returns the rank of the piece overtaken, or -1 if the socket failed.
+ */
+int sendMove(int socket, Move move){
+	if(send(socket, &move, sizeof(Move), 0) < 0)
+		return -1;
+	if(send(socket, &BOARD[move.sr][move.sc], sizeof(int), 0) < 0)
+		return -1;
+	if(read(socket, &BOARD[move.dr][move.dc].rank, sizeof(int)) < 0)
+		return -1;
+	
+	//perform the move
+	return makeMove(move);
+}
+
+/**
+ * Reads a move and a rank via TCP packet and updates the board.
+ * Sends a rank to the other player.
+ * Finally, performs the given move.
+ * 
+ * Returns the rank of the piece overtaken, or -1 if the socket failed.
+ */
+int readMove(int socket){
+	//read a move and rank
+	Move move;
+	int rank;
+	
+	if(read(socket, &move, sizeof(Move)) < 0)
+		return -1;
+	if(read(socket, &rank, sizeof(int)) < 0)
+		return -1;
+
+	//update the board
+	BOARD[move.sr][move.sc].rank = rank;
+	
+	//send a rank to the other player
+	if(send(socket, &BOARD[move.dr][move.dc], sizeof(int), 0) < 0)
+		return -1;
+	
+	//perform the move
+	return makeMove(move);
+}
+
+/**
+ * Play an offline game. If naive is true, default setup is used.
+ * Returns the winning player's number.
+ */
+int offlineGame(int naive){
+	resetBoard();
+	
+	if(naive){
+		defaultSetup();
+	}
+	else{
+		drawBoard(1);
+		setupBoard(1);
+		drawBoard(2);
+		setupBoard(2);
+	}
 
 	int turn = 0;
 	for(int player = 1; ; player = player==1?2:1){
@@ -66,16 +342,13 @@ int main(){
 			mvaddch(rowStart+11, colStart+14, decodeRank(turn));
 		}
 
-		turn = takeTurn(player);
-		
-		if(turn == 12){
-			drawRevelation();
-			attron(COLOR_PAIR(5));
-			mvaddstr(rowStart+11, colStart+3, "Player ");
-			mvaddch(rowStart+11, colStart+10, player + 48);
-			mvaddstr(rowStart+11, colStart+11, " wins!");
+		Move move = takeTurn(player);
+		turn = makeMove(move);
+		drawPiece(move.sr, move.sc, player);
+		drawPiece(move.dr, move.dc, player);
 
-			break;
+		if(turn == 12){
+			return player;
 		}
 		else{
 			drawBoard(player);
@@ -84,16 +357,15 @@ int main(){
 				mvaddstr(rowStart+11, colStart+5, "Attacked ");
 				mvaddch(rowStart+11, colStart+14, decodeRank(turn));
 				getch();
-				//~ mvaddstr(rowStart+11, colStart+3, "            ");
 			}
 		}
 	}
-	
-	getch();
-	endwin();
-	return 0;
 }
 
+/**
+ * Draw the number of remaining pieces of each type to the message
+ * portion of the screen.
+ */
 void drawDistr(int* distr){
 	char s[21];
 	attron(COLOR_PAIR(5));
@@ -108,6 +380,9 @@ void drawDistr(int* distr){
 	mvaddstr(rowStart+13, colStart, s);
 }
 
+/**
+ * Erase the message portion of the screen.
+ */
 void clearMsg(){
 	attron(COLOR_PAIR(5));
 	mvaddstr(rowStart+11, colStart, "                    ");
@@ -115,6 +390,10 @@ void clearMsg(){
 	mvaddstr(rowStart+13, colStart, "                    ");
 }
 
+/**
+ * Populate the board with a naive arrangement of pieces.
+ * Only used in debugging.
+ */
 void defaultSetup(){
 	//The top 4 rows are player 2
 	int distr[12] = {1, 1, 1, 2, 3, 4, 4, 4, 5, 8, 1, 6}; //flag, 1-9, spy, bomb
@@ -165,6 +444,9 @@ void defaultSetup(){
 
 }
 
+/**
+ * Allow a given player to set up the board.
+ */
 void setupBoard(int player){
 	int printCol = colStart, printRow = rowStart+6;
 	int distr[12] = {1, 1, 1, 2, 3, 4, 4, 4, 5, 8, 1, 6}; //flag, 1-9, spy, bomb
@@ -274,11 +556,15 @@ void setupBoard(int player){
 	}
 }
 
-
-int takeTurn(int player){
+/**
+ * Allow a given player to move a piece.
+ * Returns the Move selected by the player.
+ */
+Move takeTurn(int player){
 	int printCol = colStart, printRow = rowStart+6;
 	int selRow = -1, selCol = -1; //print coordinates, not board coordinates
 	selectPiece2(printRow, printCol, player);
+	refresh();
 
 	for(;;){
 		int ch = getch();
@@ -323,33 +609,13 @@ int takeTurn(int player){
 				}
 			}
 			else if(selRow >= 0){ //we chose a non-player piece and have a piece selected
-				if(checkValidity(sr, sc, r, c) && BOARD[r][c].rank < 13){
-					int ret = BOARD[r][c].rank;
-					if(BOARD[r][c].rank == 12){ //we win the game
-						BOARD[r][c].known1 = 1; //reveal to all
-						BOARD[r][c].known2 = 1;
-					}
-					else if(BOARD[sr][sc].rank == BOARD[r][c].rank || //it's a draw
-						   (BOARD[r][c].rank == 11 && BOARD[sr][sc].rank != 8)){ //or they're a bomb and we're not a miner
-						clearPiece(&BOARD[sr][sc]);
-						clearPiece(&BOARD[r][c]);
-					}
-					else if(BOARD[sr][sc].rank < BOARD[r][c].rank || //we win
-						   (BOARD[r][c].rank == 11 && BOARD[sr][sc].rank == 8) || //or they're a bomb and we're a miner
-						   (BOARD[r][c].rank == 1 && BOARD[sr][sc].rank == 10) || //or they're a 1 and we're a spy
-						   (BOARD[r][c].rank == 0)){ //or they're empty space
-						BOARD[r][c] = BOARD[sr][sc]; //we take over
-						clearPiece(&BOARD[sr][sc]); //clear the old spot
-					}
-					else if(BOARD[sr][sc].rank > BOARD[r][c].rank){ //we lose
-						clearPiece(&BOARD[sr][sc]); //we die
-						BOARD[r][c].known1 = 1; //reveal to all
-						BOARD[r][c].known2 = 1;
-					}
-					
-					drawPiece2(selRow, selCol, player);
-					drawPiece2(printRow, printCol, player);
-					return ret;
+				if(checkValidity(sr, sc, r, c)){
+					Move move;
+					move.sr = sr;
+					move.sc = sc;
+					move.dr = r;
+					move.dc = c;
+					return move;
 				}
 				else{ //we are trying to violate movement permission.
 					attron(COLOR_PAIR(5));
@@ -360,4 +626,37 @@ int takeTurn(int player){
 			}
 		}
 	}
+}
+
+/**
+ * Performs a given move. Assumes move is valid and source and
+ * destination ranks are known. Does not draw to screen.
+ */
+int makeMove(Move move){
+	int us = BOARD[move.sr][move.sc].rank;
+	int them = BOARD[move.dr][move.dc].rank;
+	
+	if(them == 12){ //we win the game
+		BOARD[move.dr][move.dc].known1 = 1; //reveal to all
+		BOARD[move.dr][move.dc].known2 = 1;
+	}
+	else if(us == them || //it's a draw
+		   (them == 11 && us != 8)){ //or they're a bomb and we're not a miner
+		clearPiece(&BOARD[move.sr][move.sc]);
+		clearPiece(&BOARD[move.dr][move.dc]);
+	}
+	else if(us < them || //we win the fight
+		   (them == 11 && us == 8) || //or they're a bomb and we're a miner
+		   (them == 1 && us == 10) || //or they're a 1 and we're a spy
+		   (them == 0)){ //or they're empty space
+		BOARD[move.dr][move.dc] = BOARD[move.sr][move.sc]; //we take over
+		clearPiece(&BOARD[move.sr][move.sc]); //clear the old spot
+	}
+	else if(us > them){ //we lose the fight
+		clearPiece(&BOARD[move.sr][move.sc]); //we die
+		BOARD[move.dr][move.dc].known1 = 1; //reveal to all
+		BOARD[move.dr][move.dc].known2 = 1;
+	}
+	
+	return them;
 }
